@@ -4,21 +4,17 @@ A hardened SSH MCP server for remote command execution and SFTP file transfer. F
 
 ## Tools
 
-- **exec** — Run shell commands on the remote server
-- **upload** — Transfer a local file to the remote server via SFTP
-- **download** — Transfer a remote file to the local machine via SFTP
+| Tool | Description |
+|------|-------------|
+| **exec** | Run a shell command on the remote server |
+| **upload** | Transfer a local file to the remote server via SFTP |
+| **download** | Transfer a remote file to the local machine via SFTP |
 
 3 runtime dependencies, ~500 lines of source.
 
 ## Install
 
 Requires Node.js 18+.
-
-```bash
-npm install -g as-ssh-mcp
-```
-
-Or from source:
 
 ```bash
 git clone https://github.com/pug-stoic-kennel/as-ssh-mcp.git
@@ -29,10 +25,12 @@ npm run build
 
 ## Usage
 
+All examples assume you cloned to `/path/to/as-ssh-mcp` and ran the build step above. Replace `YOUR_IP`, `YOUR_USER`, and the key path with your actual values.
+
 ### Claude Code
 
 ```bash
-claude mcp add --transport stdio as-ssh-mcp --scope user -- npx as-ssh-mcp --host=YOUR_IP --user=YOUR_USER --key=/full/path/to/private/key --timeout=120000 --maxChars=none
+claude mcp add --transport stdio as-ssh-mcp --scope user -- node /path/to/as-ssh-mcp/build/index.js --host=YOUR_IP --user=YOUR_USER --key=/full/path/to/private/key --timeout=120000 --maxChars=none
 ```
 
 ### OpenCode
@@ -45,8 +43,8 @@ Add to your `opencode.json`:
     "as-ssh-mcp": {
       "type": "local",
       "command": [
-        "npx",
-        "as-ssh-mcp",
+        "node",
+        "/path/to/as-ssh-mcp/build/index.js",
         "--host=YOUR_IP",
         "--user=YOUR_USER",
         "--key=/full/path/to/private/key",
@@ -65,9 +63,9 @@ Add to your `opencode.json`:
 {
   "mcpServers": {
     "as-ssh-mcp": {
-      "command": "npx",
+      "command": "node",
       "args": [
-        "as-ssh-mcp",
+        "/path/to/as-ssh-mcp/build/index.js",
         "--host=YOUR_IP",
         "--user=YOUR_USER",
         "--key=/full/path/to/private/key",
@@ -105,6 +103,12 @@ Reading package lists...
 [stderr]
 WARNING: apt does not have a stable CLI interface.
 [exit code: 0]
+```
+
+File transfers return a confirmation message with bytes transferred:
+
+```
+Uploaded /tmp/config.yaml → /etc/myapp/config.yaml (2048 bytes)
 ```
 
 ## Audit Logging
