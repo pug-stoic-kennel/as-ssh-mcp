@@ -5,7 +5,7 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { Client, ClientChannel, SFTPWrapper } from 'ssh2';
 import { z } from 'zod';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { appendFile, mkdir } from 'fs/promises';
+import { appendFile, mkdir, stat, readFile } from 'fs/promises';
 import path from 'path';
 import { homedir } from 'os';
 
@@ -62,7 +62,7 @@ if (isCliEnabled) {
   const errors = validateConfig(argvConfig);
   if (errors.length > 0) {
     console.error('Configuration error:\n' + errors.join('\n'));
-    console.error('\nUsage: ssh-mcp-asc --host=IP --user=USER --key=/path/to/key [--port=22] [--timeout=60000] [--maxChars=none]');
+    console.error('\nUsage: as-ssh-mcp --host=IP --user=USER --key=/path/to/key [--port=22] [--timeout=60000] [--maxChars=none]');
     process.exit(1);
   }
 }
@@ -340,7 +340,7 @@ export async function uploadFile(
           return;
         }
 
-        import('fs/promises').then(fs => fs.stat(localPath)).then(stats => {
+        stat(localPath).then(stats => {
           resolve({
             content: [{ type: 'text', text: `Uploaded ${localPath} → ${validatedPath} (${stats.size} bytes)` }],
             bytesTransferred: stats.size,
@@ -386,7 +386,7 @@ export async function downloadFile(
           return;
         }
 
-        import('fs/promises').then(fs => fs.stat(localPath)).then(stats => {
+        stat(localPath).then(stats => {
           resolve({
             content: [{ type: 'text', text: `Downloaded ${validatedPath} → ${localPath} (${stats.size} bytes)` }],
             bytesTransferred: stats.size,
@@ -402,8 +402,33 @@ export async function downloadFile(
   });
 }
 
+async function ensureConnection(): Promise<SSHConnectionManager> {
+  if (!connectionManager) {
+    if (!HOST || !USER) {
+      throw new McpError(ErrorCode.InvalidParams, 'Missing required host or username');
+    }
+
+    const sshConfig: SSHConfig = {
+      host: HOST,
+      port: PORT,
+      username: USER,
+    };
+
+    if (KEY) {
+      sshConfig.privateKey = await readFile(KEY, 'utf8');
+    } else if (PASSWORD) {
+      sshConfig.password = PASSWORD;
+    }
+
+    connectionManager = new SSHConnectionManager(sshConfig);
+  }
+
+  await connectionManager.ensureConnected();
+  return connectionManager;
+}
+
 const server = new McpServer({
-  name: 'SSH MCP Server (ASC)',
+  name: 'as-ssh-mcp',
   version: '1.0.0',
 });
 
@@ -426,35 +451,14 @@ server.registerTool(
     const start = Date.now();
 
     try {
-      if (!connectionManager) {
-        if (!HOST || !USER) {
-          throw new McpError(ErrorCode.InvalidParams, 'Missing required host or username');
-        }
-
-        const sshConfig: SSHConfig = {
-          host: HOST,
-          port: PORT,
-          username: USER,
-        };
-
-        if (KEY) {
-          const fs = await import('fs/promises');
-          sshConfig.privateKey = await fs.readFile(KEY, 'utf8');
-        } else if (PASSWORD) {
-          sshConfig.password = PASSWORD;
-        }
-
-        connectionManager = new SSHConnectionManager(sshConfig);
-      }
-
-      await connectionManager.ensureConnected();
+      const manager = await ensureConnection();
 
       const safeDescription = sanitizeDescription(description);
       const commandWithDescription = safeDescription
         ? `${sanitizedCommand} # ${safeDescription.replace(/#/g, '\\#')}`
         : sanitizedCommand;
 
-      const result = await execCommand(connectionManager, commandWithDescription);
+      const result = await execCommand(manager, commandWithDescription);
       const outputText = result.content[0]?.text ?? '';
 
       const exitCodeMatch = outputText.match(/\[exit code: (\d+)\]/);
@@ -500,29 +504,8 @@ server.registerTool(
     const start = Date.now();
 
     try {
-      if (!connectionManager) {
-        if (!HOST || !USER) {
-          throw new McpError(ErrorCode.InvalidParams, 'Missing required host or username');
-        }
-
-        const sshConfig: SSHConfig = {
-          host: HOST,
-          port: PORT,
-          username: USER,
-        };
-
-        if (KEY) {
-          const fs = await import('fs/promises');
-          sshConfig.privateKey = await fs.readFile(KEY, 'utf8');
-        } else if (PASSWORD) {
-          sshConfig.password = PASSWORD;
-        }
-
-        connectionManager = new SSHConnectionManager(sshConfig);
-      }
-
-      await connectionManager.ensureConnected();
-      const result = await uploadFile(connectionManager, localPath, remotePath);
+      const manager = await ensureConnection();
+      const result = await uploadFile(manager, localPath, remotePath);
 
       await auditLog({
         timestamp: new Date().toISOString(),
@@ -564,29 +547,8 @@ server.registerTool(
     const start = Date.now();
 
     try {
-      if (!connectionManager) {
-        if (!HOST || !USER) {
-          throw new McpError(ErrorCode.InvalidParams, 'Missing required host or username');
-        }
-
-        const sshConfig: SSHConfig = {
-          host: HOST,
-          port: PORT,
-          username: USER,
-        };
-
-        if (KEY) {
-          const fs = await import('fs/promises');
-          sshConfig.privateKey = await fs.readFile(KEY, 'utf8');
-        } else if (PASSWORD) {
-          sshConfig.password = PASSWORD;
-        }
-
-        connectionManager = new SSHConnectionManager(sshConfig);
-      }
-
-      await connectionManager.ensureConnected();
-      const result = await downloadFile(connectionManager, remotePath, localPath);
+      const manager = await ensureConnection();
+      const result = await downloadFile(manager, remotePath, localPath);
 
       await auditLog({
         timestamp: new Date().toISOString(),
