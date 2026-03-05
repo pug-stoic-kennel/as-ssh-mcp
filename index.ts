@@ -331,6 +331,7 @@ server.registerTool(
   },
   async ({ command, description }) => {
     const sanitizedCommand = sanitizeCommand(command);
+    const start = Date.now();
 
     try {
       if (!connectionManager) {
@@ -361,8 +362,31 @@ server.registerTool(
         ? `${sanitizedCommand} # ${safeDescription.replace(/#/g, '\\#')}`
         : sanitizedCommand;
 
-      return await execCommand(connectionManager, commandWithDescription);
+      const result = await execCommand(connectionManager, commandWithDescription);
+      const outputText = result.content[0]?.text ?? '';
+
+      const exitCodeMatch = outputText.match(/\[exit code: (\d+)\]/);
+      const exitCode = exitCodeMatch ? parseInt(exitCodeMatch[1]) : 0;
+
+      await auditLog({
+        timestamp: new Date().toISOString(),
+        tool: 'exec',
+        input: { command: sanitizedCommand },
+        exitCode,
+        durationMs: Date.now() - start,
+        outputSize: outputText.length,
+      });
+
+      return result;
     } catch (err: unknown) {
+      await auditLog({
+        timestamp: new Date().toISOString(),
+        tool: 'exec',
+        input: { command: sanitizedCommand },
+        exitCode: -1,
+        durationMs: Date.now() - start,
+        outputSize: 0,
+      });
       if (err instanceof McpError) throw err;
       const message = err instanceof Error ? err.message : String(err);
       throw new McpError(ErrorCode.InternalError, `Unexpected error: ${message}`);
