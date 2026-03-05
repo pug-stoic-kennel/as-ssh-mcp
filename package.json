@@ -1,0 +1,48 @@
+{
+  "name": "as-ssh-mcp",
+  "version": "1.0.0",
+  "description": "Hardened SSH MCP server for remote command execution and SFTP file transfer.",
+  "type": "module",
+  "bin": {
+    "as-ssh-mcp": "build/index.js"
+  },
+  "scripts": {
+    "build": "tsc && chmod +x build/*.js",
+    "test": "cross-env SSH_MCP_DISABLE_MAIN=1 vitest --run",
+    "test:watch": "cross-env SSH_MCP_DISABLE_MAIN=1 vitest"
+  },
+  "files": [
+    "build"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.5",
+    "ssh2": "^1.17.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "@types/ssh2": "^1.15.5",
+    "cross-env": "^7.0.3",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  },
+  "homepage": "https://github.com/pug-stoic-kennel/as-ssh-mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pug-stoic-kennel/as-ssh-mcp.git"
+  },
+  "keywords": [
+    "ssh",
+    "mcp",
+    "model-context-protocol",
+    "server",
+    "linux",
+    "remote",
+    "cli",
+    "typescript"
+  ],
+  "author": "Average Society Consulting LLC",
+  "engines": {
+    "node": ">=18"
+  }
+}
