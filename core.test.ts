@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { sanitizeCommand, escapeCommandForShell, parseArgv, validateConfig, sanitizeDescription, validateRemotePath } from './index.js';
+import { describe, it, expect, beforeEach, afterAll } from 'vitest';
+import { sanitizeCommand, escapeCommandForShell, parseArgv, validateConfig, sanitizeDescription, validateRemotePath, auditLog } from './index.js';
+import type { AuditEntry } from './index.js';
+import { existsSync, readFileSync, rmSync } from 'fs';
+import path from 'path';
 
 describe('sanitizeCommand', () => {
   it('trims whitespace', () => {
@@ -106,5 +109,66 @@ describe('validateRemotePath', () => {
 
   it('rejects empty paths', () => {
     expect(() => validateRemotePath('')).toThrow('cannot be empty');
+  });
+});
+
+describe('auditLog', () => {
+  const testLogDir = path.join(import.meta.dirname, '.test-audit');
+  const testLogFile = path.join(testLogDir, 'audit.log');
+
+  const cleanup = () => {
+    if (existsSync(testLogDir)) {
+      rmSync(testLogDir, { recursive: true });
+    }
+  };
+
+  beforeEach(cleanup);
+  afterAll(cleanup);
+
+  it('writes a JSON line to the log file', async () => {
+    const entry: AuditEntry = {
+      timestamp: '2026-03-05T14:30:00.000Z',
+      tool: 'exec',
+      input: { command: 'ls -la' },
+      exitCode: 0,
+      durationMs: 100,
+      outputSize: 42,
+    };
+    await auditLog(entry, testLogFile);
+    const contents = readFileSync(testLogFile, 'utf8').trim();
+    const parsed = JSON.parse(contents);
+    expect(parsed.tool).toBe('exec');
+    expect(parsed.exitCode).toBe(0);
+    expect(parsed.outputSize).toBe(42);
+  });
+
+  it('appends multiple entries', async () => {
+    const entry: AuditEntry = {
+      timestamp: '2026-03-05T14:30:00.000Z',
+      tool: 'exec',
+      input: { command: 'ls' },
+      exitCode: 0,
+      durationMs: 50,
+      outputSize: 10,
+    };
+    await auditLog(entry, testLogFile);
+    await auditLog({ ...entry, input: { command: 'pwd' } }, testLogFile);
+    const lines = readFileSync(testLogFile, 'utf8').trim().split('\n');
+    expect(lines).toHaveLength(2);
+    expect(JSON.parse(lines[0]).input.command).toBe('ls');
+    expect(JSON.parse(lines[1]).input.command).toBe('pwd');
+  });
+
+  it('creates the log directory if missing', async () => {
+    const entry: AuditEntry = {
+      timestamp: '2026-03-05T14:30:00.000Z',
+      tool: 'upload',
+      input: { localPath: '/tmp/a', remotePath: '/tmp/b' },
+      exitCode: 0,
+      durationMs: 200,
+      outputSize: 1024,
+    };
+    await auditLog(entry, testLogFile);
+    expect(existsSync(testLogFile)).toBe(true);
   });
 });

@@ -5,6 +5,9 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { Client, ClientChannel } from 'ssh2';
 import { z } from 'zod';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { appendFile, mkdir } from 'fs/promises';
+import path from 'path';
+import { homedir } from 'os';
 
 function parseArgv() {
   const args = process.argv.slice(2);
@@ -103,6 +106,26 @@ export function validateRemotePath(remotePath: string): string {
     throw new McpError(ErrorCode.InvalidParams, 'Path traversal (..) is not allowed');
   }
   return normalized;
+}
+
+export interface AuditEntry {
+  timestamp: string;
+  tool: string;
+  input: Record<string, string>;
+  exitCode: number;
+  durationMs: number;
+  outputSize: number;
+}
+
+const DEFAULT_AUDIT_LOG = path.join(homedir(), '.ssh-mcp-asc', 'audit.log');
+
+export async function auditLog(entry: AuditEntry, logFile: string = DEFAULT_AUDIT_LOG): Promise<void> {
+  try {
+    await mkdir(path.dirname(logFile), { recursive: true });
+    await appendFile(logFile, JSON.stringify(entry) + '\n');
+  } catch {
+    // Logging failures are silent — never block command execution
+  }
 }
 
 export interface SSHConfig {
