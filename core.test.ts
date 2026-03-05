@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
-import { sanitizeCommand, escapeCommandForShell, parseArgv, validateConfig, sanitizeDescription, validateRemotePath, auditLog, uploadFile } from './index.js';
+import { sanitizeCommand, escapeCommandForShell, parseArgv, validateConfig, sanitizeDescription, validateRemotePath, auditLog, uploadFile, downloadFile } from './index.js';
 import type { AuditEntry } from './index.js';
 import { existsSync, readFileSync, rmSync } from 'fs';
 import path from 'path';
@@ -181,6 +181,18 @@ describe('uploadFile', () => {
 
   it('rejects empty remotePath', async () => {
     await expect(uploadFile(null as any, '/tmp/local', ''))
+      .rejects.toThrow('cannot be empty');
+  });
+});
+
+describe('downloadFile', () => {
+  it('rejects path traversal in remotePath', async () => {
+    await expect(downloadFile(null as any, '../../etc/passwd', '/tmp/local'))
+      .rejects.toThrow('Path traversal');
+  });
+
+  it('rejects empty remotePath', async () => {
+    await expect(downloadFile(null as any, '', '/tmp/local'))
       .rejects.toThrow('cannot be empty');
   });
 });

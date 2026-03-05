@@ -356,6 +356,52 @@ export async function uploadFile(
   });
 }
 
+export async function downloadFile(
+  manager: SSHConnectionManager,
+  remotePath: string,
+  localPath: string,
+): Promise<{
+  content: { type: 'text'; text: string }[];
+  bytesTransferred: number;
+}> {
+  const validatedPath = validateRemotePath(remotePath);
+
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new McpError(ErrorCode.InternalError, `Download timed out after ${DEFAULT_TIMEOUT}ms`));
+    }, DEFAULT_TIMEOUT);
+
+    const conn = manager.getConnection();
+    conn.sftp((err: Error | undefined, sftp: SFTPWrapper) => {
+      if (err) {
+        clearTimeout(timeoutId);
+        reject(new McpError(ErrorCode.InternalError, `SFTP session error: ${err.message}`));
+        return;
+      }
+
+      sftp.fastGet(validatedPath, localPath, (err: Error | null | undefined) => {
+        clearTimeout(timeoutId);
+        if (err) {
+          reject(new McpError(ErrorCode.InternalError, `Download failed: ${err.message}`));
+          return;
+        }
+
+        import('fs/promises').then(fs => fs.stat(localPath)).then(stats => {
+          resolve({
+            content: [{ type: 'text', text: `Downloaded ${validatedPath} → ${localPath} (${stats.size} bytes)` }],
+            bytesTransferred: stats.size,
+          });
+        }).catch(() => {
+          resolve({
+            content: [{ type: 'text', text: `Downloaded ${validatedPath} → ${localPath}` }],
+            bytesTransferred: 0,
+          });
+        });
+      });
+    });
+  });
+}
+
 const server = new McpServer({
   name: 'SSH MCP Server (ASC)',
   version: '1.0.0',
@@ -493,6 +539,70 @@ server.registerTool(
         timestamp: new Date().toISOString(),
         tool: 'upload',
         input: { localPath, remotePath },
+        exitCode: 1,
+        durationMs: Date.now() - start,
+        outputSize: 0,
+      });
+      if (err instanceof McpError) throw err;
+      const message = err instanceof Error ? err.message : String(err);
+      throw new McpError(ErrorCode.InternalError, `Unexpected error: ${message}`);
+    }
+  }
+);
+
+server.registerTool(
+  'download',
+  {
+    description: 'Download a file from the remote SSH server to the local machine via SFTP.',
+    inputSchema: {
+      remotePath: z.string().describe('Absolute path on the remote server to download'),
+      localPath: z.string().describe('Absolute path on the local machine to write the file'),
+      description: z.string().optional().describe('Optional description of what this download does'),
+    },
+  },
+  async ({ remotePath, localPath, description }) => {
+    const start = Date.now();
+
+    try {
+      if (!connectionManager) {
+        if (!HOST || !USER) {
+          throw new McpError(ErrorCode.InvalidParams, 'Missing required host or username');
+        }
+
+        const sshConfig: SSHConfig = {
+          host: HOST,
+          port: PORT,
+          username: USER,
+        };
+
+        if (KEY) {
+          const fs = await import('fs/promises');
+          sshConfig.privateKey = await fs.readFile(KEY, 'utf8');
+        } else if (PASSWORD) {
+          sshConfig.password = PASSWORD;
+        }
+
+        connectionManager = new SSHConnectionManager(sshConfig);
+      }
+
+      await connectionManager.ensureConnected();
+      const result = await downloadFile(connectionManager, remotePath, localPath);
+
+      await auditLog({
+        timestamp: new Date().toISOString(),
+        tool: 'download',
+        input: { remotePath, localPath },
+        exitCode: 0,
+        durationMs: Date.now() - start,
+        outputSize: result.bytesTransferred,
+      });
+
+      return { content: result.content };
+    } catch (err: unknown) {
+      await auditLog({
+        timestamp: new Date().toISOString(),
+        tool: 'download',
+        input: { remotePath, localPath },
         exitCode: 1,
         durationMs: Date.now() - start,
         outputSize: 0,
