@@ -39,7 +39,9 @@ If not installed or below 18:
 brew install node
 ```
 
-**Clone and build as-ssh-mcp**
+**Install as-ssh-mcp**
+
+Option A — Clone and build from source:
 
 ```bash
 git clone https://github.com/pug-stoic-kennel/as-ssh-mcp.git
@@ -49,6 +51,14 @@ npm run build
 ```
 
 Note the full path to the built server (e.g., `/Users/YOUR_USERNAME/as-ssh-mcp/build/index.js`). You'll need it in Steps 5 and 6.
+
+Option B — Install globally via npm (if published):
+
+```bash
+npm install -g as-ssh-mcp
+```
+
+This puts `as-ssh-mcp` on your PATH. Steps 5 and 6 become simpler because you reference `as-ssh-mcp` instead of the full path. See [docs/npm-local-install.md](docs/npm-local-install.md) for the full npm workflow.
 
 **Existing SSH Admin Access**
 
@@ -124,10 +134,18 @@ You should see `mcp-key-works` printed with no password prompt. If you get "Perm
 
 ## Step 5: Add SSH MCP to Claude Code
 
-Run this from your Mac terminal, replacing the path to your clone:
+Run this from your Mac terminal.
+
+If you installed from source (Option A):
 
 ```bash
 claude mcp add --transport stdio as-ssh-mcp --scope user -- node /path/to/as-ssh-mcp/build/index.js --host=YOUR_HOSTINGER_IP --port=22 --user=YOUR_USER --key=/Users/YOUR_USERNAME/.ssh/hostinger_mcp --timeout=120000 --maxChars=none
+```
+
+If you installed globally via npm (Option B):
+
+```bash
+claude mcp add --transport stdio as-ssh-mcp --scope user -- as-ssh-mcp --host=YOUR_HOSTINGER_IP --port=22 --user=YOUR_USER --key=/Users/YOUR_USERNAME/.ssh/hostinger_mcp --timeout=120000 --maxChars=none
 ```
 
 **Flag breakdown:**
@@ -151,7 +169,9 @@ Use the FULL ABSOLUTE PATH for `--key` (starting with `/Users/...`), not `~/.ssh
 
 ## Step 6: Add SSH MCP to OpenCode
 
-Add to your `opencode.json`:
+Add to your `opencode.json`.
+
+If you installed from source (Option A):
 
 ```json
 {
@@ -161,6 +181,28 @@ Add to your `opencode.json`:
       "command": [
         "node",
         "/path/to/as-ssh-mcp/build/index.js",
+        "--host=YOUR_HOSTINGER_IP",
+        "--port=22",
+        "--user=YOUR_USER",
+        "--key=/Users/YOUR_USERNAME/.ssh/hostinger_mcp",
+        "--timeout=120000",
+        "--maxChars=none"
+      ],
+      "enabled": true
+    }
+  }
+}
+```
+
+If you installed globally via npm (Option B):
+
+```json
+{
+  "mcp": {
+    "as-ssh-mcp": {
+      "type": "local",
+      "command": [
+        "as-ssh-mcp",
         "--host=YOUR_HOSTINGER_IP",
         "--port=22",
         "--user=YOUR_USER",
@@ -399,7 +441,7 @@ claude mcp list
 claude mcp remove as-ssh-mcp
 ```
 
-**Update to latest version:**
+**Update to latest version (from source):**
 
 ```bash
 cd /path/to/as-ssh-mcp
@@ -408,15 +450,28 @@ npm install
 npm run build
 ```
 
+**Update to latest version (npm global):**
+
+```bash
+npm update -g as-ssh-mcp
+```
+
 Then restart any running MCP clients.
 
 **Change configuration:**
 
-Remove and re-add with new flags:
+Remove and re-add with new flags. From source:
 
 ```bash
 claude mcp remove as-ssh-mcp
 claude mcp add --transport stdio as-ssh-mcp --scope user -- node /path/to/as-ssh-mcp/build/index.js --host=NEW_IP --user=NEW_USER --key=/Users/YOUR_USERNAME/.ssh/hostinger_mcp --timeout=120000 --maxChars=none
+```
+
+Or with npm global install:
+
+```bash
+claude mcp remove as-ssh-mcp
+claude mcp add --transport stdio as-ssh-mcp --scope user -- as-ssh-mcp --host=NEW_IP --user=NEW_USER --key=/Users/YOUR_USERNAME/.ssh/hostinger_mcp --timeout=120000 --maxChars=none
 ```
 
 **View audit log:**
