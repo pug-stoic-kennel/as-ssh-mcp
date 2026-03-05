@@ -93,6 +93,18 @@ export function sanitizeDescription(description: string | undefined): string | u
   return description.replace(/[\x00-\x1f]/g, ' ');
 }
 
+export function validateRemotePath(remotePath: string): string {
+  if (!remotePath || !remotePath.trim()) {
+    throw new McpError(ErrorCode.InvalidParams, 'Remote path cannot be empty');
+  }
+  const normalized = remotePath.replace(/\\/g, '/');
+  const segments = normalized.split('/');
+  if (segments.some(s => s === '..')) {
+    throw new McpError(ErrorCode.InvalidParams, 'Path traversal (..) is not allowed');
+  }
+  return normalized;
+}
+
 export interface SSHConfig {
   host: string;
   port: number;

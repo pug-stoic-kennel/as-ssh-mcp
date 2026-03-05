@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeCommand, escapeCommandForShell, parseArgv, validateConfig, sanitizeDescription } from './index.js';
+import { sanitizeCommand, escapeCommandForShell, parseArgv, validateConfig, sanitizeDescription, validateRemotePath } from './index.js';
 
 describe('sanitizeCommand', () => {
   it('trims whitespace', () => {
@@ -76,5 +76,35 @@ describe('sanitizeDescription', () => {
 
   it('returns undefined for undefined input', () => {
     expect(sanitizeDescription(undefined)).toBeUndefined();
+  });
+});
+
+describe('validateRemotePath', () => {
+  it('allows absolute paths', () => {
+    expect(() => validateRemotePath('/home/user/file.txt')).not.toThrow();
+  });
+
+  it('allows relative paths without traversal', () => {
+    expect(() => validateRemotePath('file.txt')).not.toThrow();
+  });
+
+  it('rejects paths with .. components', () => {
+    expect(() => validateRemotePath('/home/../etc/passwd')).toThrow('Path traversal');
+  });
+
+  it('rejects paths that are just ..', () => {
+    expect(() => validateRemotePath('..')).toThrow('Path traversal');
+  });
+
+  it('rejects paths starting with ../', () => {
+    expect(() => validateRemotePath('../../etc/shadow')).toThrow('Path traversal');
+  });
+
+  it('allows paths with .. in filenames', () => {
+    expect(() => validateRemotePath('/home/user/file..backup')).not.toThrow();
+  });
+
+  it('rejects empty paths', () => {
+    expect(() => validateRemotePath('')).toThrow('cannot be empty');
   });
 });
